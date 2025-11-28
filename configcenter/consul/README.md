@@ -103,3 +103,5 @@ type Conf struct {
 	Key        string        `json:",optional"` // 配置中心key名称
 	Type       string        `json:",default=yaml,options=yaml|hcl|json|xml"` // 配置类型
 }
+
+```
