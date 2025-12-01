@@ -194,8 +194,8 @@ func (cc *CommonClient) clientRegistration() error {
 	case CheckTypeGrpc:
 		reg.Checks = []*api.AgentServiceCheck{
 			{
-				CheckID:                        cc.serviceId,                                        // Service node name
-				GRPC:                           fmt.Sprintf("%s%d", cc.serviceHost, cc.servicePort), // health check method
+				CheckID:                        cc.serviceId,                                         // Service node name
+				GRPC:                           fmt.Sprintf("%s:%d", cc.serviceHost, cc.servicePort), // health check method
 				TLSServerName:                  cc.consulConf.CheckGrpc.TLSServerName,
 				TLSSkipVerify:                  cc.consulConf.CheckGrpc.TLSSkipVerify,
 				GRPCUseTLS:                     cc.consulConf.CheckGrpc.GRPCUseTLS,
@@ -263,7 +263,7 @@ func (cc *CommonClient) setRegisterServiceHealthStatus(status string) error {
 		})
 	case CheckTypeGrpc:
 		check := api.AgentServiceCheck{
-			GRPC:                           fmt.Sprintf("%s%d", cc.serviceHost, cc.servicePort), // health check method
+			GRPC:                           fmt.Sprintf("%s:%d", cc.serviceHost, cc.servicePort), // health check method
 			TLSServerName:                  cc.consulConf.CheckGrpc.TLSServerName,
 			TLSSkipVerify:                  cc.consulConf.CheckGrpc.TLSSkipVerify,
 			GRPCUseTLS:                     cc.consulConf.CheckGrpc.GRPCUseTLS,                             // health check method
