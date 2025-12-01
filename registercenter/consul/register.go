@@ -233,7 +233,7 @@ func (cc *CommonClient) setRegisterServiceHealthStatus(status string) error {
 			AgentServiceCheck: check,
 		})
 	case CheckTypeHttp:
-		httpCheckHost := figureOutListenOn(cc.consulConf.CheckHttp.Host)
+		httpCheckHost := figureOutListenOn(fmt.Sprintf("%s:%d", cc.consulConf.CheckHttp.Host, cc.consulConf.CheckHttp.Port))
 		check := api.AgentServiceCheck{
 			HTTP:                           fmt.Sprintf("%s://%s%s", cc.consulConf.CheckHttp.Scheme, httpCheckHost, cc.consulConf.CheckHttp.Path), // health check url
 			Method:                         cc.consulConf.CheckHttp.Method,                                                                        // health check method
