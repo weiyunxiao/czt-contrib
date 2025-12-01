@@ -1,31 +1,3 @@
-# Consul注册中心使用文档
-
-## 1. 项目介绍
-
-本模块提供了基于Consul的服务注册与发现功能，支持自动注册、健康检查、监控和服务发现，适用于微服务架构中服务治理场景。
-
-主要功能包括：
-- 服务自动注册与注销
-- 多种健康检查机制（TTL、HTTP、GRPC）
-- 服务健康状态监控与自动恢复
-- 基于gRPC的服务发现解析器
-- 优雅关闭与资源清理
-- 容器环境（如Kubernetes）适配
-
-## 2. 项目结构
-
-```
-registercnter/consul/
-├── README.md        # 使用文档
-├── builder.go       # 服务构建器
-├── config.go        # 配置结构定义
-├── consul_test.go   # 单元测试
-├── go.mod           # Go模块文件
-├── go.sum           # 依赖校验文件
-├── register.go      # 核心注册实现
-├── resovler.go      # gRPC服务发现解析器
-└── target.go        # 目标服务定义
-```
 
 ## 3. 安装
 
@@ -86,6 +58,7 @@ func main() {
 | Tag | []string | 服务标签                                                  | [] |
 | Meta | map[string]string | 服务元数据                                                 | nil |
 | CheckHttp | CheckHttpConf | HTTP健康检查配置                                            | - |
+| CheckGrpc | CheckGrpcConf | GRPC健康检查配置                                            | - |
 
 ### 4.3 HTTP健康检查配置
 
@@ -99,7 +72,17 @@ type CheckHttpConf struct {
 }
 ```
 
-### 4.4 健康检查类型
+### 4.4 GRPC健康检查配置
+
+```go
+type CheckGrpcConf struct {
+	TLSServerName string // TLS服务器名称（可选）
+	TLSSkipVerify bool   // 是否跳过TLS验证，默认true
+	GRPCUseTLS    bool   // 是否使用TLS，默认false
+}
+```
+
+### 4.5 健康检查类型
 
 支持三种健康检查类型：
 
@@ -124,7 +107,20 @@ type CheckHttpConf struct {
 
 3. **GRPC检查** (`CheckTypeGrpc`)
     - 适用于直接检查gRPC服务健康状态
-    - 注：当前实现框架已具备，可根据需要进一步完善
+    - 详细配置示例：
+    ```go
+    conf := consul.Conf{
+        CheckType: consul.CheckTypeGrpc,
+        TTL:       20,  // 健康检查间隔
+        CheckTimeout: 5, // 健康检查超时时间
+        CheckGrpc: consul.CheckGrpcConf{
+            TLSServerName: "example.com", // 可选，用于TLS连接验证
+            TLSSkipVerify: true,          // 是否跳过TLS验证，默认true
+            GRPCUseTLS:    false,         // 是否使用TLS连接，默认false
+        },
+    }
+    ```
+    - 注意事项：使用GRPC检查时，您的gRPC服务需要实现标准的健康检查服务接口（`grpc.health.v1.Health`）
 
 ## 5. 核心API
 
@@ -300,6 +296,7 @@ func main() {
 3. **合理设置健康检查**
     - HTTP检查适用于有Web接口的服务
     - TTL检查适用于需要自定义健康逻辑的场景
+    - GRPC检查适用于gRPC服务，需要实现标准健康检查接口
 
 ### 11.2 服务发现最佳实践
 
@@ -324,6 +321,7 @@ func main() {
 2. **健康检查失败**
     - TTL模式：检查网络连接是否稳定
     - HTTP模式：验证健康检查端点是否正确配置并返回200状态
+    - GRPC模式：确保服务实现了标准的健康检查接口
 
 3. **服务自动注销**
     - 检查TTL设置是否合理
@@ -350,4 +348,3 @@ func main() {
 ## 14. 许可证
 
 [MIT License](LICENSE)
-        

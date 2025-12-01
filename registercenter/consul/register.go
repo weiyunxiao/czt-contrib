@@ -192,6 +192,19 @@ func (cc *CommonClient) clientRegistration() error {
 		}
 
 	case CheckTypeGrpc:
+		reg.Checks = []*api.AgentServiceCheck{
+			{
+				CheckID:                        cc.serviceId,                                        // Service node name
+				GRPC:                           fmt.Sprintf("%s%d", cc.serviceHost, cc.servicePort), // health check method
+				TLSServerName:                  cc.consulConf.CheckGrpc.TLSServerName,
+				TLSSkipVerify:                  cc.consulConf.CheckGrpc.TLSSkipVerify,
+				GRPCUseTLS:                     cc.consulConf.CheckGrpc.GRPCUseTLS,
+				Interval:                       fmt.Sprintf("%ds", cc.consulConf.TTL),          // health check interval
+				Timeout:                        fmt.Sprintf("%ds", cc.consulConf.CheckTimeout), // health check timeout
+				DeregisterCriticalServiceAfter: fmt.Sprintf("%ds", cc.consulConf.TTL*cc.consulConf.ExpiredTTL),
+				Status:                         api.HealthPassing,
+			},
+		}
 	case CheckTypeHttp:
 		// todo 可以考虑混合健康检查，例如TTL和HTTP
 		httpCheckHost := figureOutListenOn(fmt.Sprintf("%s:%d", cc.consulConf.CheckHttp.Host, cc.consulConf.CheckHttp.Port))
@@ -249,11 +262,25 @@ func (cc *CommonClient) setRegisterServiceHealthStatus(status string) error {
 			AgentServiceCheck: check,
 		})
 	case CheckTypeGrpc:
+		check := api.AgentServiceCheck{
+			GRPC:                           fmt.Sprintf("%s%d", cc.serviceHost, cc.servicePort), // health check method
+			TLSServerName:                  cc.consulConf.CheckGrpc.TLSServerName,
+			TLSSkipVerify:                  cc.consulConf.CheckGrpc.TLSSkipVerify,
+			GRPCUseTLS:                     cc.consulConf.CheckGrpc.GRPCUseTLS,                             // health check method
+			Interval:                       fmt.Sprintf("%ds", cc.consulConf.TTL),                          // health check interval
+			Timeout:                        fmt.Sprintf("%ds", cc.consulConf.CheckTimeout),                 // health check timeout
+			DeregisterCriticalServiceAfter: fmt.Sprintf("%ds", cc.consulConf.TTL*cc.consulConf.ExpiredTTL), // Deregistration time
+			Status:                         status,
+		}
+		return cc.apiClient.Agent().CheckRegister(&api.AgentCheckRegistration{
+			ID:                cc.registration.ID,
+			Name:              cc.registration.Name,
+			ServiceID:         cc.registration.ID,
+			AgentServiceCheck: check,
+		})
 	default:
 		return fmt.Errorf("unknown check type: %s", cc.consulConf.CheckType)
 	}
-
-	return nil
 }
 
 func (cc *CommonClient) getRegisterServiceHealthStatus() (string, error) {

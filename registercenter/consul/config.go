@@ -24,6 +24,12 @@ type CheckHttpConf struct {
 	Scheme string `json:",default=http,options=http|https"`
 }
 
+type CheckGrpcConf struct {
+	TLSServerName string `json:",optional"`
+	TLSSkipVerify bool   `json:",default=true"`
+	GRPCUseTLS    bool   `json:",default=false"`
+}
+
 // Conf is the config item with the given key on etcd.
 type Conf struct {
 	Host         string            // consul hosts
@@ -37,6 +43,7 @@ type Conf struct {
 	CheckTimeout int               `json:",default=3"`                         // health check timeout, http or grpc check timeout, ttl unuse
 	CheckType    string            `json:",default=ttl,options=ttl|grpc|http"` // check type, ttl, http or grpc
 	CheckHttp    CheckHttpConf
+	CheckGrpc    CheckGrpcConf
 }
 
 // Validate validates c.
