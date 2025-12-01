@@ -30,7 +30,7 @@ registercnter/consul/
 ## 3. 安装
 
 ```bash
-go get -u github.com/your-project/bk/czt-contrib/registercnter/consul
+go get -u github.com/lerity-yao/czt-contrib/registercenter/consul
 ```
 
 ## 4. 服务注册
@@ -157,7 +157,7 @@ func MustNewService(listenOn string, c Conf, opts ...ServiceOption) Client
 ```go
 import (
 	"google.golang.org/grpc"
-	_ "github.com/your-project/bk/czt-contrib/registercnter/consul" // 自动注册解析器
+	_ "github.com/lerity-yao/czt-contrib/registercenter/consul" // 自动注册解析器
 )
 
 func main() {
@@ -201,7 +201,7 @@ Consul服务发现URL支持以下查询参数：
 import (
 	"fmt"
 	"time"
-	"github.com/your-project/bk/czt-contrib/registercnter/consul"
+	"github.com/lerity-yao/czt-contrib/registercenter/consul"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -242,7 +242,7 @@ func main() {
 
 ```go
 import (
-	"github.com/your-project/bk/czt-contrib/registercnter/consul"
+	"github.com/lerity-yao/czt-contrib/registercenter/consul"
 )
 
 func main() {
