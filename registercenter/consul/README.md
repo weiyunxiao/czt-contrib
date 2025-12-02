@@ -1,3 +1,30 @@
+# Consul注册中心使用文档
+
+## 1. 项目介绍
+
+本模块提供了基于Consul的服务注册与发现功能，支持自动注册、健康检查、监控和服务发现，适用于微服务架构中服务治理场景。
+
+主要功能包括：
+- 服务自动注册与注销
+- 多种健康检查机制（TTL、HTTP、GRPC）
+- 服务健康状态监控与自动恢复
+- 基于gRPC的服务发现解析器
+- 优雅关闭与资源清理
+- 容器环境（如Kubernetes）适配
+
+## 2. 项目结构
+```
+registercnter/consul/ 
+├── README.md # 使用文档 
+├── builder.go # 服务构建器 
+├── config.go # 配置结构定义 
+├── consul_test.go # 单元测试
+├── go.mod # Go模块文件 
+├── go.sum # 依赖校验文件 
+├── register.go # 核心注册实现 
+├── resovler.go # gRPC服务发现解析器 
+└── target.go # 目标服务定义
+```
 
 ## 3. 安装
 
@@ -45,21 +72,20 @@ func main() {
 
 `consul.Conf` 结构体包含以下配置项：
 
-| 字段名 | 类型 | 描述                                                    | 默认值 |
-|-------|------|-------------------------------------------------------|-------|
-| Host | string | Consul服务器地址                                           | 无（必需） |
-| Key | string | 服务名称                                                  | 无（必需） |
-| Scheme | string | 连接协议(http/https)                                      | "http" |
-| Token | string | Consul访问令牌                                            | "" |
-| CheckType | string | 健康检查类型                                                | "ttl" |
-| TTL | int | 健康检查间隔(秒)，TTL/HTTP/GRPC                               | 20 |
-| CheckTimeout | int | 当consul需要访问服务的健康检查接口时，即checktype不是 ttl的时候，健康检查超时时间(秒) | 3 |
-| ExpiredTTL | int | 服务过期时间系数，基础时间为TTL，过期时间为TTL*ExpiredTTL                           | 3 |
-| Tag | []string | 服务标签                                                  | [] |
-| Meta | map[string]string | 服务元数据                                                 | nil |
-| CheckHttp | CheckHttpConf | HTTP健康检查配置                                            | - |
-| CheckGrpc | CheckGrpcConf | GRPC健康检查配置                                            | - |
-
+| 字段名          | 类型                | 描述                                                    | 默认值                   |
+|--------------|-------------------|-------------------------------------------------------|-----------------------|
+| Host         | string            | Consul服务器地址                                           | 无（必需）                 |
+| Key          | string            | 服务名称                                                  | 无（必需）                 |
+| Scheme       | string            | 连接协议(http/https)                                      | "http"                |
+| Token        | string            | Consul访问令牌                                            | ""                    |
+| CheckType    | string            | 健康检查类型                                                | "ttl"，可选ttl，http，grpc |
+| TTL          | int               | 健康检查间隔(秒)，TTL/HTTP/GRPC                               | 20                    |
+| CheckTimeout | int               | 当consul需要访问服务的健康检查接口时，即checktype不是 ttl的时候，健康检查超时时间(秒) | 3                     |
+| ExpiredTTL   | int               | 服务过期时间系数，基础时间为TTL，过期时间为TTL*ExpiredTTL                 | 3                     |
+| Tag          | []string          | 服务标签                                                  | []                    |
+| Meta         | map[string]string | 服务元数据                                                 | nil                   |
+| CheckHttp    | CheckHttpConf     | HTTP健康检查配置，CheckType为http的时候，此配置生效                    | -                     |
+| CheckGrpc    | CheckGrpcConf     | GRPC健康检查配置，CheckType为grpc的时候，此配置生效                    | -                     |
 ### 4.3 HTTP健康检查配置
 
 ```go
@@ -91,6 +117,9 @@ type CheckGrpcConf struct {
     - 适用于需要应用自定义健康逻辑的场景
 
 2. **HTTP检查** (`CheckTypeHttp`)
+    - 适用于直接检查api服务健康状态
+    - `http` 检查为 `consul` 服务端向服务发起请求，机制为 `consul` 服务端定时发起
+    - 服务必须预留一个可以检测服务健康的接口， `go-zero` 开启健康检查之后， 默认会有一个 `host:6060/healthz` 的健康检查接口
     - 详细配置示例：
     ```go
     conf := consul.Conf{
@@ -107,6 +136,8 @@ type CheckGrpcConf struct {
 
 3. **GRPC检查** (`CheckTypeGrpc`)
     - 适用于直接检查gRPC服务健康状态
+    - `grpc` 检查为 `consul` 服务端向服务发起请求，机制为 `consul` 服务端定时发起
+    - 服务必须预留一个可以检测服务健康的接口， `go-zero` 开启rpc服务之后， 默认会有一个 `grpc.health.v1.Health/Check` 的健康检查接口
     - 详细配置示例：
     ```go
     conf := consul.Conf{
@@ -203,21 +234,8 @@ import (
 
 // 自定义监控函数
 func customMonitorFunc() consul.MonitorFunc {
-	return func(cc *consul.CommonClient, state *consul.MonitorState) error {
-		// 自定义健康检查逻辑
-		isHealthy := checkMyServiceHealth()
-		
-		if isHealthy {
-			// 重置重试状态
-			state.RetryCount = 0
-			state.BackoffTime = 1 * time.Second
-			state.Ticker.Reset(state.OriginalTTL)
-			logx.Infof("Service %s is healthy", cc.GetServiceID())
-			return nil
-		}
-		
-		// 服务不健康，返回错误触发重试逻辑
-		return fmt.Errorf("service is unhealthy")
+	return func(cc *CommonClient, stopCh <-chan struct{}) {
+		// todo your logic
 	}
 }
 
