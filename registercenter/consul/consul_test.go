@@ -13,6 +13,86 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestConsulCreateApiClient(t *testing.T) {
+	// Set shorter TTL to speed up testing
+	conf := Conf{
+		Host:      "http://127.0.0.1:8500",
+		Key:       "aaaaa.rpc",
+		TTL:       20,
+		CheckType: "ttl",
+	}
+
+	// Create a WaitGroup to wait for service registration goroutine
+	service := MustNewService("127.0.0.1:8100", conf)
+	//
+	err := service.RegisterService()
+	require.Nil(t, err)
+	//模拟apiClient异常了
+	go func() {
+		time.Sleep(30 * time.Second)
+		client := service.GetServiceClient()
+		client2, _ := api.NewClient(&api.Config{
+			Scheme:  "http",
+			Address: "http://127.0.0.1:8600",
+		})
+		//
+		*client = *client2
+		fmt.Printf("client is nil: %v\n", client)
+	}()
+
+	// Wait for service registration goroutine to complete or timeout
+	select {}
+}
+
+func TestConsulNodeDeleteRegister(t *testing.T) {
+	// Set shorter TTL to speed up testing
+	conf := Conf{
+		Host:      "http://127.0.0.1:8500",
+		Key:       "aaaaa.rpc",
+		TTL:       40,
+		CheckType: "ttl",
+	}
+
+	// Create a WaitGroup to wait for service registration goroutine
+	service := MustNewService("127.0.0.1:8100", conf)
+	//
+	err := service.RegisterService()
+	require.Nil(t, err)
+	//selfNodeName, _ := service.GetServiceClient().Agent().NodeName()
+	members, err := service.GetServiceClient().Agent().Members(false)
+	if err != nil {
+		fmt.Printf("获取节点列表失败%v\n", err)
+	}
+	for _, member := range members {
+		fmt.Printf("member name %v\n", member.Name)
+		//if member.Name == selfNodeName {
+		//	fmt.Printf("==============此节点是当前节点\n")
+		//	continue
+		//}
+		//time.Sleep(40 * time.Second)
+		fmt.Printf("单个节点信息==================%s:%d\n", member.Addr, member.Port)
+		nodeAddr := fmt.Sprintf("%s:%d", member.Addr, member.Port) //todo docker中的consul将会是docker窗口ip 172.17.0.2:8301
+		nodeAddr = "127.0.0.1:8500"                                //todo
+		client, err := api.NewClient(&api.Config{
+			Scheme:  "http",
+			Address: nodeAddr,
+		})
+		if err != nil {
+			fmt.Printf("节点[%v]---NewClient failed: %v\n", nodeAddr, err)
+			continue
+		}
+		err = client.Agent().ServiceDeregister(service.GetServiceID())
+		if err != nil {
+			fmt.Printf("deregister failed: %v\n", err)
+		} else {
+			fmt.Printf("deregister success: %v\n", service.GetServiceID())
+		}
+		time.Sleep(10 * time.Second)
+	}
+
+	// Wait for service registration goroutine to complete or timeout
+	select {}
+}
 func TestConsulRegisterTTL(t *testing.T) {
 	// Set shorter TTL to speed up testing
 	conf := Conf{

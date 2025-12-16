@@ -172,11 +172,39 @@ func (cc *CommonClient) newApiClient() (*api.Client, error) {
 // registerServiceWithPassingHealth registers the service with a passing health check.
 // It returns an error if the registration fails.
 func (cc *CommonClient) registerServiceWithPassingHealth() error {
+	/****************获取所有节点,遍历注销服务*********************/
+	selfNodeName, _ := cc.apiClient.Agent().NodeName()
+
+	nodeMembers, err := cc.apiClient.Agent().Members(false)
+	for _, member := range nodeMembers {
+		//如果是当前节点
+		if member.Name == selfNodeName {
+			continue
+		}
+		nodeAddr := fmt.Sprintf("%s:%d", member.Addr, member.Port)
+		logx.Infof("one node info is:%s", nodeAddr)
+
+		client, err := api.NewClient(&api.Config{
+			Scheme:  "http",
+			Address: nodeAddr,
+			Token:   cc.consulConf.Token,
+		})
+		if err != nil {
+			logx.Errorf("nodeAddr=%s,api.NewClient() have error: %s", nodeAddr, err.Error())
+			continue
+		}
+		err = client.Agent().ServiceDeregister(cc.serviceId)
+		if err != nil {
+			logx.Errorf("nodeAddr=%s,ServiceDeregister() have error: %s", nodeAddr, err.Error())
+			continue
+		}
+	}
+	/****************获取所有节点,遍历注销服务 end ****************/
 
 	_ = cc.deleteRegisterService()
 	time.Sleep(100 * time.Millisecond)
 
-	err := cc.registerService()
+	err = cc.registerService()
 	if err != nil {
 		return err
 	}
@@ -374,6 +402,7 @@ func (cc *CommonClient) registerServiceMonitors() error {
 	if hasNoFuncs {
 		cc.monitorMutex.Lock()
 		if len(cc.monitorFuncs) == 0 {
+			cc.monitorFuncs = append(cc.monitorFuncs, ApiClientCheckMonitorFunc())
 			switch cc.consulConf.CheckType {
 			case CheckTypeTTL:
 				cc.monitorFuncs = append(cc.monitorFuncs, TTLCheckMonitorFunc())
@@ -427,6 +456,83 @@ func (s *MonitorState) Close() {
 		s.Ticker.Stop()
 		s.Ticker = nil
 	}
+}
+
+// ApiClientCheckMonitorFunc is the monitor function for ApiClient check.
+func ApiClientCheckMonitorFunc() MonitorFunc {
+
+	return func(cc *CommonClient, stopCh <-chan struct{}) {
+
+		ttlTicker := 20 * time.Second
+
+		state := &MonitorState{
+			RetryCount:     0,
+			BackoffTime:    2 * time.Second,
+			MaxRetries:     3,
+			MaxBackoffTime: 30 * time.Second,
+			OriginalTTL:    ttlTicker,
+			Ticker:         time.NewTicker(ttlTicker),
+		}
+		defer state.Close()
+
+		for {
+			select {
+			case <-state.Ticker.C:
+				err := ApiClientLogic(cc, state)
+				if err != nil {
+					logx.Errorf("ApiClientCheckMonitorFunc function error for service %s: %v", cc.serviceId, err)
+				}
+			case <-stopCh:
+				logx.Infof("ApiClientCheckMonitorFunc Service monitor for %s stopped gracefully", cc.serviceId)
+				return
+			}
+		}
+	}
+}
+
+// ApiClientLogic is the logic for ApiClient monitor.
+func ApiClientLogic(cc *CommonClient, state *MonitorState) error {
+	// update TTL
+	_, err := cc.apiClient.Status().Leader()
+	if err == nil {
+		logx.Infof("Service %s, ApiClient now is ok", cc.serviceId)
+		state.RetryCount = 0
+		state.BackoffTime = 2 * time.Second
+		state.Ticker.Reset(state.OriginalTTL)
+		return nil
+	}
+
+	state.Mutex.Lock()
+	defer state.Mutex.Unlock()
+	if state.RetryCount < state.MaxRetries {
+		logx.Infof("Attempting to recreate-ApiClient service %s (retry %d/%d)...", cc.serviceId, state.RetryCount+1, state.MaxRetries)
+		client, err := cc.newApiClient()
+		if err != nil {
+			logx.Errorf("Failed to recreate-ApiClient service %s: %v. Retrying in %v", cc.serviceId, err, state.BackoffTime)
+			state.RetryCount++
+
+			state.Ticker.Reset(state.BackoffTime)
+			nextBackoffTime := state.BackoffTime * 2
+			if nextBackoffTime > state.MaxBackoffTime {
+				nextBackoffTime = state.MaxBackoffTime
+			}
+			state.BackoffTime = nextBackoffTime
+			return err
+		}
+		cc.apiClient = client
+		logx.Infof("Service %s recreate-ApiClientd successfully", cc.serviceId)
+		state.RetryCount = 0
+		state.BackoffTime = 2 * time.Second
+		state.Ticker.Reset(state.OriginalTTL)
+		return nil
+	}
+
+	// reset retry counter and backoff time if not registered
+	logx.Errorf("recreate-ApiClientd Max retries reached for service %s. Resetting retry counter and backoff time.", cc.serviceId)
+	state.RetryCount = 0
+	state.BackoffTime = 1 * time.Second
+	state.Ticker.Reset(state.BackoffTime)
+	return nil
 }
 
 // TTLCheckMonitorFunc is the monitor function for TTL check.
